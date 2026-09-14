@@ -4,7 +4,11 @@
 # Маркируем как 'integration', чтобы их можно было отключать
 # при быстрой проверке.
 # =====================================================================
+
 import pytest
+
+from llm_agent.core_v2 import LLMAgent
+
 
 @pytest.mark.integration
 def test_wikipedia_russian_live():
@@ -13,14 +17,12 @@ def test_wikipedia_russian_live():
     реальная Ollama → LLMAgent → WikipediaTool → Wikipedia API.
     """
 
-    from llm_agent.core import LLMAgent
-
     agent = LLMAgent(
         local=True,
         ollama_model="qwen3:0.6b"
     )
 
-    query = "Кто такой Альберт Эйнштейн?"
+    query = "Используй Wikipedia и найди информацию об Альберте Эйнштейне."
     response = agent.process_query(query)
 
     assert isinstance(response, str)
@@ -40,14 +42,12 @@ def test_wikipedia_english_live():
     реальная Ollama → LLMAgent → WikipediaTool → Wikipedia API.
     """
 
-    from llm_agent.core import LLMAgent
-
     agent = LLMAgent(
         local=True,
         ollama_model="qwen3:0.6b"
     )
 
-    query = "Find information about Albert Einstein using Wikipedia."
+    query = "Use Wikipedia to find information about Albert Einstein."
     response = agent.process_query(query)
 
     assert isinstance(response, str)
@@ -56,5 +56,5 @@ def test_wikipedia_english_live():
     assert (
         "Einstein" in response
         or "Эйнштейн" in response
-        or "Альберт" in response
+        or "Albert" in response
     )
