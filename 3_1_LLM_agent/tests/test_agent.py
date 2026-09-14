@@ -4,6 +4,7 @@
 # Маркируем как 'integration', чтобы их можно было отключать
 # при быстрой проверке.
 # =====================================================================
+import pytest
 
 @pytest.mark.integration
 def test_wikipedia_russian_live():
