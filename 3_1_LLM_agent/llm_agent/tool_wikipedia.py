@@ -14,19 +14,34 @@ class WikipediaTool:
         """
         Ищет статью в Wikipedia и возвращает её краткую выдержку.
 
-        Args:
-            query: Поисковый запрос или название статьи.
-            language: Язык Wikipedia: 'ru' или 'en'.
+        Поддерживает два формата вызова:
 
-        Returns:
-            Краткая выдержка из статьи или сообщение об ошибке.
+        1. wiki.use("Искусственный интеллект", "ru")
+        2. wiki.use("Искусственный интеллект | ru")
+
+        Второй формат нужен для совместимости с LLMAgent,
+        который передаёт инструменту только одну строку input.
         """
+
         try:
+            # Если язык передан внутри строки:
+            # "Искусственный интеллект | ru"
+            if "|" in query:
+                query, language_from_query = query.rsplit("|", 1)
+                query = query.strip()
+                language = language_from_query.strip().lower()
+
+            language = language.strip().lower()
+
+            # Проверяем допустимые языки
             if language not in ("ru", "en"):
                 return (
                     "Ошибка: поддерживаются только языки "
                     "'ru' (русский) и 'en' (английский)."
                 )
+
+            if not query.strip():
+                return "Ошибка: поисковый запрос не может быть пустым."
 
             print(
                 f"> Выполняю поиск в Wikipedia ({language}) "
@@ -36,7 +51,9 @@ class WikipediaTool:
             # API нужной языковой версии Wikipedia
             api_url = f"https://{language}.wikipedia.org/w/api.php"
 
-            # Сначала ищем наиболее подходящую статью
+            # --------------------------------------------------
+            # Шаг 1. Поиск наиболее подходящей статьи
+            # --------------------------------------------------
             search_params = {
                 "action": "query",
                 "list": "search",
@@ -54,7 +71,12 @@ class WikipediaTool:
             response.raise_for_status()
 
             search_data = response.json()
-            search_results = search_data.get("query", {}).get("search", [])
+
+            search_results = (
+                search_data
+                .get("query", {})
+                .get("search", [])
+            )
 
             if not search_results:
                 return (
@@ -62,11 +84,14 @@ class WikipediaTool:
                     f"по запросу '{query}'."
                 )
 
+            # Получаем название найденной статьи
             page_title = search_results[0]["title"]
 
             print(f"> Найдена статья: {page_title}")
 
-            # Получаем краткую выдержку из статьи
+            # --------------------------------------------------
+            # Шаг 2. Получение краткой выдержки статьи
+            # --------------------------------------------------
             extract_params = {
                 "action": "query",
                 "prop": "extracts",
@@ -86,9 +111,15 @@ class WikipediaTool:
             response.raise_for_status()
 
             extract_data = response.json()
-            pages = extract_data.get("query", {}).get("pages", {})
+
+            pages = (
+                extract_data
+                .get("query", {})
+                .get("pages", {})
+            )
 
             page = next(iter(pages.values()), {})
+
             extract = page.get("extract", "").strip()
 
             if not extract:
@@ -97,7 +128,7 @@ class WikipediaTool:
                     "но краткая выдержка отсутствует."
                 )
 
-            # Ограничиваем длину текста
+            # Дополнительное ограничение длины
             if len(extract) > 1200:
                 extract = extract[:1200] + "..."
 
