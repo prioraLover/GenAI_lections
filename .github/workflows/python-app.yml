@@ -52,21 +52,41 @@ jobs:
 
           ollama pull qwen3:0.6b
 
+      # Запускаем тесты с coverage.
+      # Даже если тест упадёт, coverage-файл будет создан.
       - name: Run tests with coverage
+        id: tests
         working-directory: ./3_1_LLM_agent
         env:
           PYTHONPATH: .
+        continue-on-error: true
         run: |
           coverage run --source=llm_agent -m pytest -v
+          TEST_EXIT_CODE=$?
+
           coverage report
           coverage json -o ../coverage-data.json
 
+          echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          exit $TEST_EXIT_CODE
+
+      # Превращаем coverage-отчёт в JSON для Shields.io.
+      # Выполняется даже если тесты упали.
       - name: Create coverage badge JSON
+        if: always()
         run: |
           python - <<'PY'
           import json
+          import os
 
-          with open("coverage-data.json") as f:
+          coverage_file = "coverage-data.json"
+
+          if not os.path.exists(coverage_file):
+              print("Coverage data was not created")
+              raise SystemExit(1)
+
+          with open(coverage_file) as f:
               data = json.load(f)
 
           coverage = round(data["totals"]["percent_covered"], 1)
@@ -97,7 +117,9 @@ jobs:
 
           rm coverage-data.json
 
+      # Обновляем coverage.json в репозитории.
       - name: Update coverage badge
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -110,3 +132,17 @@ jobs:
             git commit -m "Update code coverage badge"
             git push
           fi
+
+      # Если тесты упали — явно завершаем job с ошибкой.
+      # Badge к этому моменту уже обновлён.
+      - name: Check test result
+        if: always()
+        run: |
+          TEST_EXIT_CODE="${{ steps.tests.outputs.TEST_EXIT_CODE }}"
+
+          if [ "$TEST_EXIT_CODE" != "0" ]; then
+            echo "Tests failed with exit code $TEST_EXIT_CODE"
+            exit "$TEST_EXIT_CODE"
+          fi
+
+          echo "All tests passed"
