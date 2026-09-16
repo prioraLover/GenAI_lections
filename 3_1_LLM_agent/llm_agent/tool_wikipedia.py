@@ -1,3 +1,4 @@
+```python
 import requests
 
 
@@ -10,37 +11,47 @@ class WikipediaTool:
         "и возвращает краткую выдержку из найденной статьи."
     )
 
+    # Wikipedia рекомендует указывать идентифицирующий User-Agent.
+    HEADERS = {
+        "User-Agent": (
+            "GenAI-Lections/1.0 "
+            "(educational project; contact: github.com/prioraLover/GenAI_lections)"
+        )
+    }
+
+    TIMEOUT = 20
+
     def use(self, query: str, language: str = "ru") -> str:
         """
         Ищет статью в Wikipedia и возвращает её краткую выдержку.
 
-        Поддерживает два формата вызова:
+        Поддерживает два формата:
 
         1. wiki.use("Искусственный интеллект", "ru")
         2. wiki.use("Искусственный интеллект | ru")
-
-        Второй формат нужен для совместимости с LLMAgent,
-        который передаёт инструменту только одну строку input.
         """
 
         try:
-            # Если язык передан внутри строки:
-            # "Искусственный интеллект | ru"
+            # --------------------------------------------------
+            # Обработка аргументов
+            # --------------------------------------------------
+
             if "|" in query:
                 query, language_from_query = query.rsplit("|", 1)
                 query = query.strip()
                 language = language_from_query.strip().lower()
 
             language = language.strip().lower()
+            query = query.strip()
 
-            # Проверяем допустимые языки
+            # Проверяем язык.
             if language not in ("ru", "en"):
                 return (
                     "Ошибка: поддерживаются только языки "
                     "'ru' (русский) и 'en' (английский)."
                 )
 
-            if not query.strip():
+            if not query:
                 return "Ошибка: поисковый запрос не может быть пустым."
 
             print(
@@ -48,12 +59,12 @@ class WikipediaTool:
                 f"по запросу: '{query}'"
             )
 
-            # API нужной языковой версии Wikipedia
             api_url = f"https://{language}.wikipedia.org/w/api.php"
 
             # --------------------------------------------------
-            # Шаг 1. Поиск наиболее подходящей статьи
+            # Шаг 1. Поиск статьи
             # --------------------------------------------------
+
             search_params = {
                 "action": "query",
                 "list": "search",
@@ -66,8 +77,10 @@ class WikipediaTool:
             response = requests.get(
                 api_url,
                 params=search_params,
-                timeout=10,
+                headers=self.HEADERS,
+                timeout=self.TIMEOUT,
             )
+
             response.raise_for_status()
 
             search_data = response.json()
@@ -84,14 +97,14 @@ class WikipediaTool:
                     f"по запросу '{query}'."
                 )
 
-            # Получаем название найденной статьи
             page_title = search_results[0]["title"]
 
             print(f"> Найдена статья: {page_title}")
 
             # --------------------------------------------------
-            # Шаг 2. Получение краткой выдержки статьи
+            # Шаг 2. Получение краткой выдержки
             # --------------------------------------------------
+
             extract_params = {
                 "action": "query",
                 "prop": "extracts",
@@ -106,8 +119,10 @@ class WikipediaTool:
             response = requests.get(
                 api_url,
                 params=extract_params,
-                timeout=10,
+                headers=self.HEADERS,
+                timeout=self.TIMEOUT,
             )
+
             response.raise_for_status()
 
             extract_data = response.json()
@@ -128,9 +143,9 @@ class WikipediaTool:
                     "но краткая выдержка отсутствует."
                 )
 
-            # Дополнительное ограничение длины
+            # Ограничиваем длину результата.
             if len(extract) > 1200:
-                extract = extract[:1200] + "..."
+                extract = extract[:1200].rstrip() + "..."
 
             result = (
                 f"Статья Wikipedia: {page_title}\n"
@@ -146,13 +161,43 @@ class WikipediaTool:
             print("> Ошибка: превышено время ожидания запроса.")
             return "Ошибка: Wikipedia не ответила вовремя."
 
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response else None
+
+            print(
+                f"> HTTP ошибка Wikipedia: "
+                f"{status_code if status_code else e}"
+            )
+
+            if status_code == 403:
+                return (
+                    "Ошибка: Wikipedia отклонила запрос (HTTP 403). "
+                    "Попробуйте повторить запрос позже."
+                )
+
+            if status_code == 429:
+                return (
+                    "Ошибка: Wikipedia временно ограничила количество "
+                    "запросов (HTTP 429). Попробуйте позже."
+                )
+
+            return (
+                f"Ошибка при обращении к Wikipedia "
+                f"(HTTP {status_code if status_code else 'unknown'})."
+            )
+
         except requests.exceptions.RequestException as e:
-            print(f"> Ошибка HTTP при обращении к Wikipedia: {e}")
-            return f"Ошибка при обращении к Wikipedia: {e}"
+            print(f"> Ошибка сети при обращении к Wikipedia: {e}")
+            return "Ошибка сети при обращении к Wikipedia."
+
+        except (ValueError, KeyError, TypeError) as e:
+            print(f"> Ошибка обработки ответа Wikipedia: {e}")
+            return "Ошибка: Wikipedia вернула некорректный ответ."
 
         except Exception as e:
-            print(f"> Ошибка при выполнении поиска: {e}")
+            print(f"> Неожиданная ошибка при поиске: {e}")
             return (
                 f"Произошла ошибка при поиске в Wikipedia "
-                f"по запросу '{query}': {e}"
+                f"по запросу '{query}'."
             )
+```
