@@ -24,7 +24,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest coverage
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
       - name: Download and extract Ollama manually
         run: |
@@ -35,8 +38,10 @@ jobs:
           fi
 
           curl -fsSL "https://ollama.com/download/ollama-linux-${ARCH}.tar.zst" -o ollama.tar.zst
+
           mkdir -p .ollama-install
           tar -C .ollama-install --zstd -xf ollama.tar.zst
+
           rm ollama.tar.zst
 
           echo "$(pwd)/.ollama-install/bin" >> $GITHUB_PATH
@@ -52,27 +57,40 @@ jobs:
 
           ollama pull qwen3:0.6b
 
-      # Запускаем тесты с coverage.
-      # Даже если тест упадёт, coverage-файл будет создан.
+      # ============================================================
+      # RUN TESTS + COVERAGE
+      # ============================================================
+      # Важно:
+      # set +e позволяет выполнить coverage report и coverage json,
+      # даже если pytest завершился с ошибкой.
+      # ============================================================
+
       - name: Run tests with coverage
         id: tests
         working-directory: ./3_1_LLM_agent
         env:
           PYTHONPATH: .
-        continue-on-error: true
         run: |
+          set +e
+
           coverage run --source=llm_agent -m pytest -v
+
           TEST_EXIT_CODE=$?
 
+          echo "Pytest exit code: $TEST_EXIT_CODE"
+
+          # Эти команды выполняются даже при FAILED-тестах.
           coverage report
           coverage json -o ../coverage-data.json
 
           echo "TEST_EXIT_CODE=$TEST_EXIT_CODE" >> "$GITHUB_OUTPUT"
 
-          exit $TEST_EXIT_CODE
+          exit 0
 
-      # Превращаем coverage-отчёт в JSON для Shields.io.
-      # Выполняется даже если тесты упали.
+      # ============================================================
+      # CREATE BADGE JSON
+      # ============================================================
+
       - name: Create coverage badge JSON
         if: always()
         run: |
@@ -83,10 +101,10 @@ jobs:
           coverage_file = "coverage-data.json"
 
           if not os.path.exists(coverage_file):
-              print("Coverage data was not created")
+              print("ERROR: coverage-data.json was not created")
               raise SystemExit(1)
 
-          with open(coverage_file) as f:
+          with open(coverage_file, "r") as f:
               data = json.load(f)
 
           coverage = round(data["totals"]["percent_covered"], 1)
@@ -117,7 +135,10 @@ jobs:
 
           rm coverage-data.json
 
-      # Обновляем coverage.json в репозитории.
+      # ============================================================
+      # UPDATE COVERAGE BADGE IN REPOSITORY
+      # ============================================================
+
       - name: Update coverage badge
         if: always()
         run: |
@@ -133,8 +154,13 @@ jobs:
             git push
           fi
 
-      # Если тесты упали — явно завершаем job с ошибкой.
-      # Badge к этому моменту уже обновлён.
+      # ============================================================
+      # CHECK TEST RESULT
+      # ============================================================
+      # Если pytest упал, workflow в конце тоже будет failed.
+      # Но coverage.json к этому моменту уже обновлён.
+      # ============================================================
+
       - name: Check test result
         if: always()
         run: |
