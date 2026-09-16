@@ -1,4 +1,4 @@
-```python
+
 import requests
 
 
@@ -200,4 +200,4 @@ class WikipediaTool:
                 f"Произошла ошибка при поиске в Wikipedia "
                 f"по запросу '{query}'."
             )
-```
+
